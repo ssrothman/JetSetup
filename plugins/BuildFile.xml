@@ -1,0 +1,16 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/ParameterSet"/>
+<use name="FWCore/Utilities"/>
+<use name="FWCore/MessageLogger"/>
+<use name="DataFormats/Candidate"/>
+<use name="DataFormats/JetReco"/>
+<use name="DataFormats/PatCandidates"/>
+<use name="DataFormats/NanoAOD"/>
+<use name="PhysicsTools/SelectorUtils"/>
+<use name="SRothman/DataFormats"/>
+<use name="SRothman/JetSetup"/>
+<use name="fastjet"/>
+<use name="correctionlib"/>
+<library file="*.cc" name="SRothmanJetSetupPlugins">
+  <flags EDM_PLUGIN="1"/>
+</library>

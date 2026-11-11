@@ -1,0 +1,12 @@
+<bin name="testSRothmanJetSetup" file="test_main.cc,test_jettools.cc">
+  <use name="catch2"/>
+  <use name="SRothman/JetSetup"/>
+</bin>
+<bin name="testSRothmanJetSetupModules" file="test_modules.cc">
+  <use name="catch2"/>
+  <use name="correctionlib"/>
+  <use name="FWCore/TestProcessor"/>
+  <use name="DataFormats/Candidate"/>
+  <use name="DataFormats/NanoAOD"/>
+  <use name="SRothman/JetSetup"/>
+</bin>
