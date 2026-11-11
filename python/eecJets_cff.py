@@ -18,6 +18,18 @@ def jmeConfig(R=0.8, era='2022_Summer22EE', tag='Summer22EE_22Sep2023', jecVersi
                 jerResolutionKey=cms.string('%s_%s_MC_PtResolution_%s' % (tag, jerVersion, algo)))
 
 
+# Placeholder constituent variations: the sizes are invented for development, not derived from CMS measurements.
+# constDrop uses its own seedSalt so its draws are independent of the JER stochastic smearing (salt 0).
+CONSTITUENT_VARIATIONS = {
+    'TrkDrop': dict(type='constDrop', categories=['chargedHadron'], dropProbability=0.02, seedSalt=1),
+    'ChargedScaleUp': dict(type='constScale', categories=['chargedHadron'], scale=1.01),
+    'ChargedScaleDown': dict(type='constScale', categories=['chargedHadron'], scale=0.99),
+    'NeutralScaleUp': dict(type='constScale', categories=['neutralHadron'], scale=1.05),
+    'NeutralScaleDown': dict(type='constScale', categories=['neutralHadron'], scale=0.95),
+    'PhotonScaleUp': dict(type='constScale', categories=['photon'], scale=1.02),
+    'PhotonScaleDown': dict(type='constScale', categories=['photon'], scale=0.98),
+}
+
 _DEFAULT_SRC = {('reco', 'pat', 0.8): 'slimmedJetsAK8', ('reco', 'pat', 0.4): 'slimmedJetsPuppi',
                 ('gen', 'pat', 0.8): 'slimmedGenJetsAK8', ('gen', 'pat', 0.4): 'slimmedGenJets',
                 ('reco', 'recluster'): 'packedPFCandidates', ('gen', 'recluster'): 'packedGenParticles'}

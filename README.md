@@ -29,8 +29,9 @@ chains below and returns `{variationName: final label}`, where `''` is the nomin
 - `constScale` / `constDrop`: `<label>JER → variation → Const → …`
 - `cuts`: the nominal chain with overridden `jetCuts` / `constituentCuts`.
 
-`jmeConfig(R)` gives the correctionlib file and keys for Summer22EE AK4/AK8 PUPPI jets. No default sizes are set for the
-constituent variations; the caller passes them.
+`jmeConfig(R)` gives the correctionlib file and keys for Summer22EE AK4/AK8 PUPPI jets.
+
+`CONSTITUENT_VARIATIONS` holds **placeholder** constituent variations with invented sizes, which are not CMS measurements: `TrkDrop` drops 2% of charged hadrons (`seedSalt` 1, independent of JER smearing); `ChargedScale`, `NeutralScale` and `PhotonScale` Up/Down shift by ±1%, ±5% and ±2%.
 
 ## Tests
 - `scram b runtests`: `testSRothmanJetSetup` (framework-free tools) and `testSRothmanJetSetupModules` (TestProcessor; the JES/JER checks use the cvmfs JME JSONs).
