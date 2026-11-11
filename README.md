@@ -20,8 +20,10 @@ and not by the module label. Every variation chain with the same salt therefore 
 Constituent categories: `chargedHadron` (charged, not e/μ), `neutralHadron`, `photon`, `electron`, `muon`, `all`.
 
 ## Python
-`SRothman.JetSetup.eecJets_cff.setupJets(process, label, level='reco'|'gen', mode='pat'|'recluster', R, ...)` adds the
-chains below and returns `{variationName: final label}`, where `''` is the nominal chain:
+`SRothman.JetSetup.eecJets_cff.setupJets(process, label, spec, isMC, vetoSrcs, writeConstituents, task)` builds one jet
+collection from a spec dict. The spec is one entry of `jets/collections` in the boostedV analysis YAML
+(`simulation/configs/default.yaml`, schema `analysis.schema.yaml`), and the helper has no physics defaults of its own.
+It returns `{variationName: final label}`, where `''` is the nominal chain:
 
 - nominal (reco, `pat`, MC): `<label>Raw → <label>JER (nominal) → <label>Const → <label>`
 - `jes`: `Raw → JES up/down → JER nominal → Const → <label><Name>`
@@ -29,12 +31,11 @@ chains below and returns `{variationName: final label}`, where `''` is the nomin
 - `constScale` / `constDrop`: `<label>JER → variation → Const → …`
 - `cuts`: the nominal chain with overridden `jetCuts` / `constituentCuts`.
 
-`jmeConfig(R)` gives the correctionlib file and keys for Summer22EE AK4/AK8 PUPPI jets.
-
-`CONSTITUENT_VARIATIONS` holds **placeholder** constituent variations with invented sizes, which are not CMS measurements: `TrkDrop` drops 2% of charged hadrons (`seedSalt` 1, independent of JER smearing); `ChargedScale`, `NeutralScale` and `PhotonScale` Up/Down shift by ±1%, ±5% and ±2%.
+Variations, and JER smearing, are built in MC only. The JME correction file and keys and the variation sizes come
+from the spec; the constituent-variation sizes in `default.yaml` are placeholders.
 
 ## Tests
 - `scram b runtests`: `testSRothmanJetSetup` (framework-free tools) and `testSRothmanJetSetupModules` (TestProcessor; the JES/JER checks use the cvmfs JME JSONs).
 - Real-data validation (manual, needs a MiniAOD file):
-  `cmsRun test/validation/validateJets_cfg.py inputFiles=file:... outputFile=jets.root maxEvents=2000` then
+  `cmsRun test/validation/validateJets_cfg.py config=<analysis yaml> inputFiles=file:... outputFile=jets.root maxEvents=2000` then
   `python3 -I test/validation/checkJets.py jets_numEvent2000.root`.
