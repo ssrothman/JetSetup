@@ -36,10 +36,12 @@ def _constSelector(src, c):
 
 def _variation(src, R, jerc, vtype, direction='nominal', categories=(), scale=1.0, dropProbability=0.0, seedSalt=0):
     # Parameters a variation type does not use are set to inert values so that every parameter is explicit.
-    j = jerc or dict(correctionFile='', jesKey='', jerScaleFactorKey='', jerResolutionKey='', rho='', genJets='')
+    j = jerc or dict(correctionFile='', jesKey='', jerScaleFactorKey='', jerScaleFactorUncertaintyKey='',
+                          jerResolutionKey='', rho='', genJets='')
     return cms.EDProducer('EECJetVariationProducer', src=cms.InputTag(src), type=cms.string(vtype),
                           direction=cms.string(direction), correctionFile=cms.string(j['correctionFile']),
                           jesKey=cms.string(j['jesKey']), jerScaleFactorKey=cms.string(j['jerScaleFactorKey']),
+                          jerScaleFactorUncertaintyKey=cms.string(j['jerScaleFactorUncertaintyKey']),
                           jerResolutionKey=cms.string(j['jerResolutionKey']), rho=cms.InputTag(j['rho']),
                           genJets=cms.InputTag(j['genJets']), jetR=cms.double(R), categories=cms.vstring(*categories),
                           scale=cms.double(scale), dropProbability=cms.double(dropProbability),
@@ -67,7 +69,7 @@ def setupJets(process, label, spec, isMC, vetoSrcs=(), writeConstituents=False, 
 
     spec keys: level (reco|gen), mode (pat|recluster), src, R, translator, jetCuts, constituentCuts, cleaningDR,
     table {name, precision}, and for reco 'pat' jets jerc {correctionFile, jesKey, jerScaleFactorKey,
-    jerResolutionKey, rho, genJets, jerSeedSalt} and variations {name: {type, ...}}.
+    jerScaleFactorUncertaintyKey, jerResolutionKey, rho, genJets, jerSeedSalt} and variations {name: {type, ...}}.
     JER smearing (nominal) is applied to reco 'pat' jets in MC only.
     """
     if spec['level'] not in ('reco', 'gen') or spec['mode'] not in ('pat', 'recluster'):

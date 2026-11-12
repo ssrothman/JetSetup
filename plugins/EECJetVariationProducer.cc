@@ -15,7 +15,8 @@
 // Applies one variation to every jet:
 //  none        copy
 //  jes         jet p4 *= 1 +- Total uncertainty (direction up | down)
-//  jer         hybrid JER smearing of the jet p4 (direction nominal | up | down), MC only
+//  jer         hybrid JER smearing of the jet p4 (direction nominal | up | down), MC only; the up/down scale
+//              factor is SF * (1 +- SFUncertainty), as in cms-cat nanoAOD-tools-modules jetCorr.py
 //  constScale  constituents in `categories` scaled by `scale`
 //  constDrop   constituents in `categories` dropped with probability `dropProbability`
 // JES/JER change only the jet four-momentum, not the constituents. Random numbers are seeded per
@@ -48,6 +49,7 @@ public:
         if (direction_ != "nominal" && direction_ != "up" && direction_ != "down")
           throw cms::Exception("Configuration") << "EECJetVariationProducer: jer direction must be nominal, up or down";
         jerSF_ = cset->at(cfg.getParameter<std::string>("jerScaleFactorKey"));
+        jerSFUnc_ = cset->at(cfg.getParameter<std::string>("jerScaleFactorUncertaintyKey"));
         jerRes_ = cset->at(cfg.getParameter<std::string>("jerResolutionKey"));
         rho_ = consumes(cfg.getParameter<edm::InputTag>("rho"));
         genJets_ = consumes(cfg.getParameter<edm::InputTag>("genJets"));
@@ -63,11 +65,12 @@ public:
     desc.add<std::string>("type", "none")->setComment("none, jes, jer, constScale or constDrop");
     desc.add<std::string>("direction", "nominal")->setComment("jes: up | down; jer: nominal | up | down");
     desc.add<std::string>("correctionFile",
-                          "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG/JME/2022_Summer22EE/"
-                          "fatJet_jerc.json.gz");
-    desc.add<std::string>("jesKey", "Summer22EE_22Sep2023_V2_MC_Total_AK8PFPuppi");
-    desc.add<std::string>("jerScaleFactorKey", "Summer22EE_22Sep2023_JRV1_MC_ScaleFactor_AK8PFPuppi");
-    desc.add<std::string>("jerResolutionKey", "Summer22EE_22Sep2023_JRV1_MC_PtResolution_AK8PFPuppi");
+                          "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-22EFGSep23-Summer22EE-NanoAODv12/"
+                          "latest/fatJet_jerc.json.gz");
+    desc.add<std::string>("jesKey", "Summer22EE_22Sep2023_V4_MC_Total_AK8PFPuppi");
+    desc.add<std::string>("jerScaleFactorKey", "Summer22EE_22Sep2023_JRV2_MC_ScaleFactor_AK8PFPuppi");
+    desc.add<std::string>("jerScaleFactorUncertaintyKey", "Summer22EE_22Sep2023_JRV2_MC_SFUncertainty_AK8PFPuppi");
+    desc.add<std::string>("jerResolutionKey", "Summer22EE_22Sep2023_JRV2_MC_PtResolution_AK8PFPuppi");
     desc.add<edm::InputTag>("rho", edm::InputTag("fixedGridRhoFastjetAll"));
     desc.add<edm::InputTag>("genJets", edm::InputTag("slimmedGenJetsAK8"));
     desc.add<double>("jetR", 0.8)->setComment("jet radius for the JER gen-jet match");
@@ -100,7 +103,9 @@ public:
           break;
         }
         case Type::JER: {
-          const double sf = jerSF_->evaluate({j.eta, j.pt, direction_ == "nominal" ? std::string("nom") : direction_});
+          double sf = jerSF_->evaluate({j.eta, j.pt});
+          if (direction_ != "nominal")
+            sf *= 1 + (direction_ == "up" ? 1 : -1) * jerSFUnc_->evaluate({j.eta, j.pt});
           const double res = jerRes_->evaluate({j.eta, j.pt, rho});
           double genPt = -1, best = 1e9;
           for (const auto& [gpt, ep] : gen) {
@@ -147,7 +152,7 @@ private:
   const double jetR_, scale_, dropP_;
   const unsigned salt_;
   std::uint32_t mask_ = 0;
-  correction::Correction::Ref jes_, jerSF_, jerRes_;
+  correction::Correction::Ref jes_, jerSF_, jerSFUnc_, jerRes_;
   edm::EDGetTokenT<double> rho_;
   edm::EDGetTokenT<edm::View<reco::Candidate>> genJets_;
 };

@@ -20,7 +20,7 @@ namespace {
 
   const std::string kHeader = "from FWCore.TestProcessor.TestProcess import *\nprocess = TestProcess()\n";
   const std::string kJME =
-      "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG/JME/2022_Summer22EE/fatJet_jerc.json.gz";
+      "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-22EFGSep23-Summer22EE-NanoAODv12/latest/fatJet_jerc.json.gz";
 
   srothman::EECParticle part(double px, double py, double pz, int q, int pdg) {
     return {px, py, pz, std::sqrt(px * px + py * py + pz * pz), static_cast<std::int8_t>(q), pdg, 1.0f, 0};
@@ -104,7 +104,7 @@ TEST_CASE("EECConstituentSelector keeps jets and filters constituents", "[module
 
 TEST_CASE("EECJetVariationProducer jes matches correctionlib", "[modules][variation]") {
   auto cset = correction::CorrectionSet::from_file(kJME);
-  auto unc = cset->at("Summer22EE_22Sep2023_V2_MC_Total_AK8PFPuppi");
+  auto unc = cset->at("Summer22EE_22Sep2023_V4_MC_Total_AK8PFPuppi");
   for (std::string dir : {"up", "down"}) {
     edm::test::TestProcessor::Config config{kHeader +
                                             "process.toTest = cms.EDProducer('EECJetVariationProducer', src = "
@@ -131,10 +131,11 @@ TEST_CASE("EECJetVariationProducer jes matches correctionlib", "[modules][variat
 
 TEST_CASE("EECJetVariationProducer jer: matched jets use the hybrid formula", "[modules][variation]") {
   auto cset = correction::CorrectionSet::from_file(kJME);
-  auto sfC = cset->at("Summer22EE_22Sep2023_JRV1_MC_ScaleFactor_AK8PFPuppi");
-  auto resC = cset->at("Summer22EE_22Sep2023_JRV1_MC_PtResolution_AK8PFPuppi");
+  auto sfC = cset->at("Summer22EE_22Sep2023_JRV2_MC_ScaleFactor_AK8PFPuppi");
+  auto uncC = cset->at("Summer22EE_22Sep2023_JRV2_MC_SFUncertainty_AK8PFPuppi");
+  auto resC = cset->at("Summer22EE_22Sep2023_JRV2_MC_PtResolution_AK8PFPuppi");
   const double rho = 20.0;
-  for (std::string dir : {"nominal", "up"}) {
+  for (std::string dir : {"nominal", "up", "down"}) {
     edm::test::TestProcessor::Config config{kHeader +
                                             "process.toTest = cms.EDProducer('EECJetVariationProducer', src = "
                                             "cms.InputTag('jets'), type = cms.string('jer'), direction = cms.string('" +
@@ -153,8 +154,9 @@ TEST_CASE("EECJetVariationProducer jer: matched jets use the hybrid formula", "[
                           std::make_pair(putR, std::make_unique<double>(rho)),
                           std::make_pair(putG, std::make_unique<std::vector<reco::LeafCandidate>>(gen)));
     const auto& out = *ev.get<EECJetCollection>();
-    const std::string sys = dir == "nominal" ? "nom" : dir;
-    const double sf = sfC->evaluate({in[0].eta, in[0].pt, sys});
+    const double u = uncC->evaluate({in[0].eta, in[0].pt});
+    REQUIRE(u > 0.001);
+    const double sf = sfC->evaluate({in[0].eta, in[0].pt}) * (dir == "up" ? 1 + u : dir == "down" ? 1 - u : 1.0);
     REQUIRE(resC->evaluate({in[0].eta, in[0].pt, rho}) * 3 * 450 > 10);  // the match criterion holds
     CHECK(out[0].pt == Approx(in[0].pt * (1 + (sf - 1) * (450 - 440.0) / 450)).epsilon(1e-9));
     CHECK(sf > 1.0);  // otherwise the matched formula would not move the jet
