@@ -14,7 +14,8 @@
 #include <vector>
 
 // Copies of the pat::Jets with the JEC re-applied from the raw momentum: p4 = raw p4 * C, with C the correctionlib
-// compound correction `key` (inputs JetA, JetEta, JetPt of the raw jet, Rho, and run for data keys), sorted by corrected pt. User data:
+// compound correction `key` (inputs JetA, JetEta, JetPt of the raw jet, Rho, and run for data keys), sorted by corrected pt
+// if sortByPt (otherwise in source order, so that srcIdx is the position). User data:
 // rawPt, jecFactor (C), jesUncTotal (relative uncertainty from uncKey at the corrected pt; absent if uncKey is
 // empty), srcIdx (index in src) and jetId (bit 0 TIGHT, bit 1 TIGHTLEPVETO of PFJetIDSelectionFunctor; 0 if
 // jetIdVersion is empty).
@@ -24,7 +25,8 @@ public:
   explicit PATJetJECProducer(const edm::ParameterSet& cfg)
       : src_(consumes(cfg.getParameter<edm::InputTag>("src"))),
         rho_(consumes(cfg.getParameter<edm::InputTag>("rho"))),
-        put_(produces()) {
+        put_(produces()),
+        sortByPt_(cfg.getParameter<bool>("sortByPt")) {
     auto cset = correction::CorrectionSet::from_file(cfg.getParameter<std::string>("correctionFile"));
     jec_ = cset->compound().at(cfg.getParameter<std::string>("key"));
     for (const auto& in : jec_->inputs())
@@ -53,6 +55,7 @@ public:
     desc.add<std::string>("key")->setComment("compound correction, e.g. ..._MC_L1L2L3Res_AK4PFPuppi");
     desc.add<std::string>("uncKey")->setComment("JES uncertainty, e.g. ..._MC_Total_AK4PFPuppi; empty: none");
     desc.add<std::string>("jetIdVersion")->setComment("PFJetIDSelectionFunctor version; empty: jetId 0");
+    desc.add<bool>("sortByPt")->setComment("sort by corrected pt; false: source order");
     descriptions.addWithDefaultLabel(desc);
   }
 
@@ -72,8 +75,10 @@ public:
           args.emplace_back(n == "JetA" ? j.jetArea() : n == "JetEta" ? raw.eta() : n == "JetPt" ? raw.pt() : rho);
       }
       const double c = jec_->evaluate(args);
-      pat::Jet cj(j);
-      cj.setP4(raw * c);
+      // Not setP4: scaleEnergy also inserts a first level "Uncorrected" = 1/c, so correctedP4("Uncorrected") and the
+      // energy fractions (jecFactor(0) * energy) still give the raw jet. The other stored levels stay MiniAOD's.
+      pat::Jet cj(j.jecSetsAvailable() ? j.correctedJet("Uncorrected") : j);
+      cj.scaleEnergy(c, "Uncorrected");
       cj.addUserFloat("rawPt", raw.pt());
       cj.addUserFloat("jecFactor", c);
       if (unc_)
@@ -87,7 +92,8 @@ public:
       cj.addUserInt("jetId", id);
       out->push_back(std::move(cj));
     }
-    std::stable_sort(out->begin(), out->end(), [](const auto& a, const auto& b) { return a.pt() > b.pt(); });
+    if (sortByPt_)
+      std::stable_sort(out->begin(), out->end(), [](const auto& a, const auto& b) { return a.pt() > b.pt(); });
     event.put(put_, std::move(out));
   }
 
@@ -95,6 +101,7 @@ private:
   const edm::EDGetTokenT<edm::View<pat::Jet>> src_;
   const edm::EDGetTokenT<double> rho_;
   const edm::EDPutTokenT<std::vector<pat::Jet>> put_;
+  const bool sortByPt_;
   correction::CompoundCorrection::Ref jec_;
   std::optional<correction::Correction::Ref> unc_;
   std::optional<PFJetIDSelectionFunctor> tight_, tightLepVeto_;

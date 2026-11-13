@@ -4,7 +4,7 @@ systematic variations, and their NanoAOD tables.
 Every value comes from the caller's collection spec (see simulation/configs/default.yaml in boostedV); there are
 no physics defaults here.
 
-Nominal reco chain (mode 'pat', MC):  <label>Raw -> <label>JER (nominal) -> <label>Const -> <label>
+Nominal reco chain (mode 'pat', MC):  [<label>JEC ->] <label>Raw -> <label>JER (nominal) -> <label>Const -> <label>
 Variation V gets its own chain ending in <label><V>:
   jes        Raw -> JES up/down -> JER nominal -> Const -> <label><V>
   jer        Raw -> JER up/down -> Const -> ...
@@ -80,6 +80,15 @@ def _retag(process, label, spec, task):
     return 'selectedUpdatedPatJets' + postfix
 
 
+def _jec(spec, isMC):
+    # Source order (sortByPt False) keeps srcIdx valid for the re-tagged copy of spec['src'].
+    j = spec['jec']
+    return cms.EDProducer('PATJetJECProducer', src=cms.InputTag(spec['src']), rho=cms.InputTag(j['rho']),
+                          correctionFile=cms.string(j['correctionFile']),
+                          key=cms.string(j['mcKey'] if isMC else j['dataKey']), uncKey=cms.string(''),
+                          jetIdVersion=cms.string(''), sortByPt=cms.bool(False))
+
+
 def _translator(spec, src):
     t, level, mode = spec['translator'], spec['level'], spec['mode']
     src = cms.InputTag(src)
@@ -102,7 +111,9 @@ def setupJets(process, label, spec, isMC, vetoSrcs=None, writeConstituents=False
     spec keys: level (reco|gen), mode (pat|recluster), src, R, translator, jetCuts, constituentCuts, cleaningDR,
     table {name, precision, extraVariables (pat-mode reco jets only; nominal table only)}, retag {taggers, vertices,
     secondaryVertices, jecPayload, variables} (pat-mode reco jets only; the taggers run on a copy of src that only feeds
-    the retag variables), and for reco 'pat' jets jerc {correctionFile, jesKey, jerScaleFactorKey,
+    the retag variables), jec {correctionFile, mcKey, dataKey, rho} (pat-mode reco jets only: the JEC re-applied from the
+    raw momentum before the translator; the table extraVariables then see the re-corrected jets), and for reco 'pat'
+    jets jerc {correctionFile, jesKey, jerScaleFactorKey,
     jerScaleFactorUncertaintyKey, jerResolutionKey, rho, genJets, jerSeedSalt} and variations {name: {type, ...}}.
     JER smearing (nominal) is applied to reco 'pat' jets in MC only.
     """
@@ -122,8 +133,11 @@ def setupJets(process, label, spec, isMC, vetoSrcs=None, writeConstituents=False
         raise ValueError('%s: table extraVariables need reco MiniAOD (pat) jets' % label)
     if spec.get('retag', {'taggers': []})['taggers'] and not (spec['level'] == 'reco' and spec['mode'] == 'pat'):
         raise ValueError('%s: retag needs reco MiniAOD (pat) jets' % label)
+    if 'jec' in spec and not (spec['level'] == 'reco' and spec['mode'] == 'pat'):
+        raise ValueError('%s: jec needs reco MiniAOD (pat) jets' % label)
     tagged = _retag(process, label, spec, task)
-    rawLabel = _add(process, task, label + 'Raw', _translator(spec, spec['src']))
+    jetSrc = _add(process, task, label + 'JEC', _jec(spec, isMC)) if 'jec' in spec else spec['src']
+    rawLabel = _add(process, task, label + 'Raw', _translator(spec, jetSrc))
 
     def tail(name, start, jc, cc):
         c = _add(process, task, label + name + 'Const', _constSelector(start, cc))
@@ -146,7 +160,7 @@ def setupJets(process, label, spec, isMC, vetoSrcs=None, writeConstituents=False
         taggedVars = spec['retag']['variables'] if tagged else []
         if name == '' and (extra or taggedVars):
             _add(process, task, out + 'ExtTable',
-                 cms.EDProducer('EECJetExtensionTableProducer', src=cms.InputTag(out), jets=cms.InputTag(spec['src']),
+                 cms.EDProducer('EECJetExtensionTableProducer', src=cms.InputTag(out), jets=cms.InputTag(jetSrc),
                                 name=cms.string(spec['table']['name']), variables=pset(extra),
                                 taggedJets=cms.InputTag(tagged or ''), taggedVariables=pset(taggedVars)))
         return out

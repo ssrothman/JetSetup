@@ -360,7 +360,7 @@ TEST_CASE("PATJetJECProducer: re-applied compound JEC, JES uncertainty, pt order
       "process.toTest = cms.EDProducer('PATJetJECProducer', src = cms.InputTag('pat'), rho = cms.InputTag('rho'), "
       "correctionFile = cms.string('" +
       file + "'), key = cms.string('" + key + "'), uncKey = cms.string('" + unc +
-      "'), jetIdVersion = cms.string(''))\nprocess.moduleToTest(process.toTest)\n"};
+      "'), jetIdVersion = cms.string(''), sortByPt = cms.bool(True))\nprocess.moduleToTest(process.toTest)\n"};
   auto putP = config.produces<std::vector<pat::Jet>>("pat");
   auto putR = config.produces<double>("rho");
   edm::test::TestProcessor tester(config);
@@ -392,6 +392,40 @@ TEST_CASE("PATJetJECProducer: re-applied compound JEC, JES uncertainty, pt order
   CHECK(out[0].pt() > out[1].pt());
 }
 
+TEST_CASE("PATJetJECProducer: sortByPt false keeps the source order", "[modules][jec]") {
+  const std::string file =
+      "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-22EFGSep23-Summer22EE-NanoAODv12/latest/fatJet_jerc.json.gz";
+  const std::string key = "Summer22EE_22Sep2023_V4_MC_L1L2L3Res_AK8PFPuppi";
+  edm::test::TestProcessor::Config config{
+      kHeader +
+      "process.toTest = cms.EDProducer('PATJetJECProducer', src = cms.InputTag('pat'), rho = cms.InputTag('rho'), "
+      "correctionFile = cms.string('" +
+      file + "'), key = cms.string('" + key +
+      "'), uncKey = cms.string(''), jetIdVersion = cms.string(''), sortByPt = cms.bool(False))\n"
+      "process.moduleToTest(process.toTest)\n"};
+  auto putP = config.produces<std::vector<pat::Jet>>("pat");
+  auto putR = config.produces<double>("rho");
+  edm::test::TestProcessor tester(config);
+  auto cs = correction::CorrectionSet::from_file(file);
+  // Source not ordered by pt: 250, 400, 300 GeV.
+  std::vector<pat::Jet> raw(3);
+  const double pts[3] = {250, 400, 300};
+  for (std::size_t i = 0; i < raw.size(); ++i) {
+    raw[i].setP4(reco::LeafCandidate::PolarLorentzVector(pts[i], -1.0 + 0.8 * i, 0.3 * i, 60));
+    raw[i].setJetArea(2.0);
+  }
+  auto ev = tester.test(std::make_pair(putP, std::make_unique<std::vector<pat::Jet>>(raw)),
+                        std::make_pair(putR, std::make_unique<double>(20.0)));
+  const auto& out = *ev.get<std::vector<pat::Jet>>();
+  REQUIRE(out.size() == 3);
+  for (std::size_t i = 0; i < out.size(); ++i) {
+    CHECK(out[i].userInt("srcIdx") == int(i));
+    CHECK(out[i].eta() == Approx(raw[i].eta()).epsilon(1e-12));
+    CHECK(out[i].pt() == Approx(pts[i] * cs->compound().at(key)->evaluate({2.0, raw[i].eta(), pts[i], 20.0})).epsilon(1e-12));
+  }
+  CHECK(out[1].pt() > out[0].pt());  // a pt sort would have moved this jet first
+}
+
 TEST_CASE("PATJetJECProducer: data keys take the run number", "[modules][jec]") {
   const std::string file =
       "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-22EFGSep23-Summer22EE-NanoAODv12/latest/jet_jerc.json.gz";
@@ -401,7 +435,8 @@ TEST_CASE("PATJetJECProducer: data keys take the run number", "[modules][jec]") 
       "process.toTest = cms.EDProducer('PATJetJECProducer', src = cms.InputTag('pat'), rho = cms.InputTag('rho'), "
       "correctionFile = cms.string('" +
       file + "'), key = cms.string('" + key +
-      "'), uncKey = cms.string(''), jetIdVersion = cms.string(''))\nprocess.moduleToTest(process.toTest)\n"};
+      "'), uncKey = cms.string(''), jetIdVersion = cms.string(''), sortByPt = cms.bool(False))\n"
+      "process.moduleToTest(process.toTest)\n"};
   auto putP = config.produces<std::vector<pat::Jet>>("pat");
   auto putR = config.produces<double>("rho");
   edm::test::TestProcessor tester(config);
