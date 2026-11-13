@@ -463,3 +463,34 @@ TEST_CASE("EECJetExtensionTableProducer: taggedVariables from the re-tagged copy
                   std::make_pair(putT, std::make_unique<std::vector<pat::Jet>>(tagged.begin(), tagged.begin() + 4))),
       cms::Exception);
 }
+
+TEST_CASE("EECJetOverlapProducer: per-channel flags and veto columns, jets kept", "[modules][veto]") {
+  edm::test::TestProcessor::Config config{
+      kHeader +
+      "process.toTest = cms.EDProducer('EECJetOverlapProducer', src = cms.InputTag('jets'), channels = "
+      "cms.vstring('Zmumu', 'GammaJets'), vetoSrcs = cms.VInputTag('mu', 'pho'), vetoDR = cms.double(0.8), name = "
+      "cms.string('RecoJet'))\nprocess.moduleToTest(process.toTest)\n"};
+  auto putJ = config.produces<EECJetCollection>("jets");
+  auto putM = config.produces<std::vector<reco::LeafCandidate>>("mu");
+  auto putP = config.produces<std::vector<reco::LeafCandidate>>("pho");
+  edm::test::TestProcessor tester(config);
+  // jets(): (0.3, 0.2), (-1.9, 2.8), (2.2, -1.0). A muon at dR 0.5 from jet 0; a photon at dR 0.79 from jet 1 (wrapping
+  // in phi) and one at dR 0.81 from jet 2.
+  std::vector<reco::LeafCandidate> mu(1), pho(2);
+  mu[0].setP4(reco::LeafCandidate::PolarLorentzVector(50, 0.6, 0.6, 0.1));
+  pho[0].setP4(reco::LeafCandidate::PolarLorentzVector(50, -1.9, 2.8 + 0.79 - 2 * M_PI, 0));
+  pho[1].setP4(reco::LeafCandidate::PolarLorentzVector(50, 2.2 + 0.81, -1.0, 0));
+  auto ev = tester.test(std::make_pair(putJ, std::make_unique<EECJetCollection>(jets())),
+                        std::make_pair(putM, std::make_unique<std::vector<reco::LeafCandidate>>(mu)),
+                        std::make_pair(putP, std::make_unique<std::vector<reco::LeafCandidate>>(pho)));
+  CHECK(*ev.get<std::vector<bool>>("Zmumu") == std::vector<bool>{true, false, false});
+  CHECK(*ev.get<std::vector<bool>>("GammaJets") == std::vector<bool>{false, true, false});
+  const auto& t = *ev.get<nanoaod::FlatTable>();
+  CHECK(t.name() == "RecoJet");
+  CHECK(t.extension());
+  REQUIRE(t.nRows() == 3);
+  for (unsigned r = 0; r < 3; ++r) {
+    CHECK(col(t, "vetoZmumu", r) == (r == 0 ? 1 : 0));
+    CHECK(col(t, "vetoGammaJets", r) == (r == 1 ? 1 : 0));
+  }
+}

@@ -95,7 +95,7 @@ def _translator(spec, src):
                           puppiValueMap=cms.InputTag(t['puppiValueMap']), dropAbsPdgIds=cms.vint32(*t['dropAbsPdgIds']))
 
 
-def setupJets(process, label, spec, isMC, vetoSrcs=(), writeConstituents=False, task=None):
+def setupJets(process, label, spec, isMC, vetoSrcs=None, writeConstituents=False, task=None):
     """Adds the nominal chain and, in MC, one chain per spec['variations'] entry; returns
     {variationName: final label}, '' = nominal.
 
@@ -127,7 +127,14 @@ def setupJets(process, label, spec, isMC, vetoSrcs=(), writeConstituents=False, 
 
     def tail(name, start, jc, cc):
         c = _add(process, task, label + name + 'Const', _constSelector(start, cc))
-        out = _add(process, task, label + name, _jetSelector(c, jc, vetoSrcs, spec['cleaningDR']))
+        out = _add(process, task, label + name, _jetSelector(c, jc, (), spec['cleaningDR']))
+        vetoes = vetoSrcs or {}
+        if vetoes:
+            # Jets are kept; each channel's overlap flags feed veto<ch> columns and the channel's aggregators.
+            _add(process, task, out + 'VetoTable',
+                 cms.EDProducer('EECJetOverlapProducer', src=cms.InputTag(out), channels=cms.vstring(*vetoes),
+                                vetoSrcs=cms.VInputTag(*vetoes.values()), vetoDR=cms.double(spec['cleaningDR']),
+                                name=cms.string(spec['table']['name'] + name)))
         _add(process, task, out + 'Table',
              cms.EDProducer('EECJetTableProducer', src=cms.InputTag(out), name=cms.string(spec['table']['name'] + name),
                             doc=cms.string(''), writeConstituents=cms.bool(writeConstituents),

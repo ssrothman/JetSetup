@@ -9,7 +9,8 @@ translation, jet and constituent selection, and systematic variations, plus Nano
 | `PATJetToEECJetProducer` | `pat::Jet` → EECJet. Constituents are the daughters, scaled by their PUPPI weight (packed `puppiWeight()` or a ValueMap). `jetIdBits`: bit 0 TIGHT, bit 1 TIGHTLEPVETO (`PFJetIDSelectionFunctor`, default `RUN3PUPPIruns2022FGruns2023CD`). **Throws for a jet above `ptMin` without daughters.** MiniAOD drops the daughters of `slimmedJetsAK8` with pt < 170 (`PhysicsTools/PatAlgos/python/slimming/applySubstructure_cff.py`), so `ptMin` must be ≥ 170 for that collection. |
 | `GenJetToEECJetProducer` | `reco::GenJet` → EECJet with its daughters (packed gen particles). |
 | `ReclusterEECJetProducer` | fastjet reclustering of any candidate collection (anti-kt/kt/CA, any R). Optional PUPPI weights; `dropAbsPdgIds` (for example neutrinos at gen level). Jets are uncorrected, with no ID. |
-| `EECJetSelector` | pt, \|η\|, required `jetIdBits`, minimum constituents, ΔR cleaning against any `View<reco::Candidate>` inputs. |
+| `EECJetSelector` | pt, \|η\|, required `jetIdBits`, minimum constituents, optional ΔR removal against `View<reco::Candidate>` inputs (unused by `setupJets`, which flags instead). |
+| `EECJetOverlapProducer` | per channel: `std::vector<bool>` (instance = channel) of jets within `vetoDR` of the channel's objects, and `veto<channel>` columns extending the jet table. |
 | `EECConstituentSelector` | constituent pt (after PUPPI weighting), charged only, \|pdgId\| keep/drop lists, minimum PUPPI weight. |
 | `EECJetVariationProducer` | one variation per instance: `jes` (up/down, Total uncertainty), `jer` (hybrid smearing: nominal/up/down), `constScale`, `constDrop` (by constituent category). JES/JER change only the jet four-momentum. Corrections are read from the JME correctionlib JSONs. |
 | `EECJetTableProducer` | NanoAOD tables `<name>` (jets) and optionally `<name>Constituents`. |
@@ -22,7 +23,7 @@ and not by the module label. Every variation chain with the same salt therefore 
 Constituent categories: `chargedHadron` (charged, not e/μ), `neutralHadron`, `photon`, `electron`, `muon`, `all`.
 
 ## Python
-`SRothman.JetSetup.eecJets_cff.setupJets(process, label, spec, isMC, vetoSrcs, writeConstituents, task)` builds one jet
+`SRothman.JetSetup.eecJets_cff.setupJets(process, label, spec, isMC, vetoSrcs, writeConstituents, task)` (vetoSrcs: {channel: InputTag of its selected objects}; jets are flagged per channel, not removed) builds one jet
 collection from a spec dict. With a `retag` block, the listed taggers (`GlobalParT`) run on a copy of `src` through `updateJetCollection` (GlobalTag JECs of `retag.jecPayload`, as NanoAOD; geometry, magnetic field and TransientTrackBuilder are loaded); the copy only feeds the `retag.variables` columns.
 The spec is one entry of `jets/collections` in the boostedV analysis YAML
 (`simulation/configs/default.yaml`, schema `analysis.schema.yaml`), and the helper has no physics defaults of its own.
