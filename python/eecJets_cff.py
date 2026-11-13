@@ -48,9 +48,41 @@ def _variation(src, R, jerc, vtype, direction='nominal', categories=(), scale=1.
                           seedSalt=cms.uint32(seedSalt))
 
 
-def _translator(spec):
+RETAG_TAGGERS = dict(GlobalParT=('RecoBTag.ONNXRuntime.pfGlobalParticleTransformerAK8_cff',
+                                  '_pfGlobalParticleTransformerAK8JetTagsAll'))
+
+
+def _retag(process, label, spec, task):
+    """Runs the taggers of spec['retag'] on the MiniAOD jets as NanoAOD does (updateJetCollection; the tagger
+    re-applies the GlobalTag JECs of retag['jecPayload']) and returns the label of the re-tagged copy, which only
+    provides the retag['variables'] columns; None without taggers."""
+    r = spec.get('retag', {'taggers': []})
+    if not r['taggers']:
+        return None
+    import importlib
+    from PhysicsTools.PatAlgos.tools.helpers import getPatAlgosToolsTask
+    from PhysicsTools.PatAlgos.tools.jetTools import updateJetCollection
+    discs = []
+    for t in r['taggers']:
+        mod, name = RETAG_TAGGERS[t]
+        discs += list(getattr(importlib.import_module(mod), name))
+    # The tag-info producers build transient tracks, which need the geometry and the magnetic field.
+    for cff in ('Configuration.StandardSequences.GeometryRecoDB_cff', 'Configuration.StandardSequences.MagneticField_cff',
+                'TrackingTools.TransientTrack.TransientTrackBuilder_cfi'):
+        process.load(cff)
+    postfix = label[0].upper() + label[1:] + 'Retag'
+    updateJetCollection(process, jetSource=cms.InputTag(spec['src']), pvSource=cms.InputTag(r['vertices']),
+                        svSource=cms.InputTag(r['secondaryVertices']), rParam=spec['R'],
+                        jetCorrections=(r['jecPayload'], cms.vstring(['L1FastJet', 'L2Relative', 'L3Absolute', 'L2L3Residual']), 'None'),
+                        btagDiscriminators=discs, postfix=postfix, printWarning=False)
+    if task is not None:
+        task.add(getPatAlgosToolsTask(process))
+    return 'selectedUpdatedPatJets' + postfix
+
+
+def _translator(spec, src):
     t, level, mode = spec['translator'], spec['level'], spec['mode']
-    src = cms.InputTag(spec['src'])
+    src = cms.InputTag(src)
     if mode == 'pat' and level == 'reco':
         return cms.EDProducer('PATJetToEECJetProducer', src=src, applyPuppiWeights=cms.bool(t['applyPuppiWeights']),
                               puppiValueMap=cms.InputTag(t['puppiValueMap']),
@@ -68,7 +100,9 @@ def setupJets(process, label, spec, isMC, vetoSrcs=(), writeConstituents=False, 
     {variationName: final label}, '' = nominal.
 
     spec keys: level (reco|gen), mode (pat|recluster), src, R, translator, jetCuts, constituentCuts, cleaningDR,
-    table {name, precision}, and for reco 'pat' jets jerc {correctionFile, jesKey, jerScaleFactorKey,
+    table {name, precision, extraVariables (pat-mode reco jets only; nominal table only)}, retag {taggers, vertices,
+    secondaryVertices, jecPayload, variables} (pat-mode reco jets only; the taggers run on a copy of src that only feeds
+    the retag variables), and for reco 'pat' jets jerc {correctionFile, jesKey, jerScaleFactorKey,
     jerScaleFactorUncertaintyKey, jerResolutionKey, rho, genJets, jerSeedSalt} and variations {name: {type, ...}}.
     JER smearing (nominal) is applied to reco 'pat' jets in MC only.
     """
@@ -84,7 +118,12 @@ def setupJets(process, label, spec, isMC, vetoSrcs=(), writeConstituents=False, 
     if canJERC and jerc is None:
         raise ValueError('%s: reco MiniAOD jets in MC need a jerc block' % label)
 
-    rawLabel = _add(process, task, label + 'Raw', _translator(spec))
+    if spec['table'].get('extraVariables') and not (spec['level'] == 'reco' and spec['mode'] == 'pat'):
+        raise ValueError('%s: table extraVariables need reco MiniAOD (pat) jets' % label)
+    if spec.get('retag', {'taggers': []})['taggers'] and not (spec['level'] == 'reco' and spec['mode'] == 'pat'):
+        raise ValueError('%s: retag needs reco MiniAOD (pat) jets' % label)
+    tagged = _retag(process, label, spec, task)
+    rawLabel = _add(process, task, label + 'Raw', _translator(spec, spec['src']))
 
     def tail(name, start, jc, cc):
         c = _add(process, task, label + name + 'Const', _constSelector(start, cc))
@@ -93,6 +132,16 @@ def setupJets(process, label, spec, isMC, vetoSrcs=(), writeConstituents=False, 
              cms.EDProducer('EECJetTableProducer', src=cms.InputTag(out), name=cms.string(spec['table']['name'] + name),
                             doc=cms.string(''), writeConstituents=cms.bool(writeConstituents),
                             precision=cms.int32(spec['table']['precision'])))
+        pset = lambda vs: cms.VPSet(*[cms.PSet(name=cms.string(v['name']), expr=cms.string(v['expr']),
+                                               type=cms.string(v['type']), doc=cms.string(v['doc']),
+                                               precision=cms.int32(v['precision'])) for v in vs if isMC or not v['mcOnly']])
+        extra = spec['table'].get('extraVariables', [])
+        taggedVars = spec['retag']['variables'] if tagged else []
+        if name == '' and (extra or taggedVars):
+            _add(process, task, out + 'ExtTable',
+                 cms.EDProducer('EECJetExtensionTableProducer', src=cms.InputTag(out), jets=cms.InputTag(spec['src']),
+                                name=cms.string(spec['table']['name']), variables=pset(extra),
+                                taggedJets=cms.InputTag(tagged or ''), taggedVariables=pset(taggedVars)))
         return out
 
     def jer(src, direction):

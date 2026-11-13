@@ -13,6 +13,8 @@ translation, jet and constituent selection, and systematic variations, plus Nano
 | `EECConstituentSelector` | constituent pt (after PUPPI weighting), charged only, \|pdgId\| keep/drop lists, minimum PUPPI weight. |
 | `EECJetVariationProducer` | one variation per instance: `jes` (up/down, Total uncertainty), `jer` (hybrid smearing: nominal/up/down), `constScale`, `constDrop` (by constituent category). JES/JER change only the jet four-momentum. Corrections are read from the JME correctionlib JSONs. |
 | `EECJetTableProducer` | NanoAOD tables `<name>` (jets) and optionally `<name>Constituents`. |
+| `EECJetExtensionTableProducer` | extension of a jet table: YAML string-expression columns on the source `pat::Jet` (`src[srcIdx]`), optionally on a re-tagged copy in the same order (`taggedJets`, `taggedVariables`; a jet that differs in η/φ is an error), and `jerFactor` (the JER smearing factor applied, accumulated in `EECJet::jerFactor` by `EECJetVariationProducer`). Nominal table only. |
+| `PATJetJECProducer` | pat::Jet copies with the JEC re-applied from the raw momentum (correctionlib compound key), sorted by pt; userFloats `rawPt`, `jecFactor`, `jesUncTotal`; userInts `srcIdx`, `jetId`. A stream module (the jet-ID functor is not const). Used for the AK4 table. |
 
 Random numbers (JER stochastic smearing, constituent drop) are seeded by (run, lumi, event, source-jet index, `seedSalt`)
 and not by the module label. Every variation chain with the same salt therefore draws the same numbers for a given jet.
@@ -21,7 +23,8 @@ Constituent categories: `chargedHadron` (charged, not e/μ), `neutralHadron`, `p
 
 ## Python
 `SRothman.JetSetup.eecJets_cff.setupJets(process, label, spec, isMC, vetoSrcs, writeConstituents, task)` builds one jet
-collection from a spec dict. The spec is one entry of `jets/collections` in the boostedV analysis YAML
+collection from a spec dict. With a `retag` block, the listed taggers (`GlobalParT`) run on a copy of `src` through `updateJetCollection` (GlobalTag JECs of `retag.jecPayload`, as NanoAOD; geometry, magnetic field and TransientTrackBuilder are loaded); the copy only feeds the `retag.variables` columns.
+The spec is one entry of `jets/collections` in the boostedV analysis YAML
 (`simulation/configs/default.yaml`, schema `analysis.schema.yaml`), and the helper has no physics defaults of its own.
 It returns `{variationName: final label}`, where `''` is the nominal chain:
 

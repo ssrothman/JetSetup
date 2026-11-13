@@ -4,6 +4,7 @@
 </bin>
 <bin name="testSRothmanJetSetupModules" file="test_modules.cc">
   <use name="catch2"/>
+  <use name="DataFormats/PatCandidates"/>
   <use name="correctionlib"/>
   <use name="FWCore/TestProcessor"/>
   <use name="DataFormats/Candidate"/>

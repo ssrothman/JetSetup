@@ -116,7 +116,9 @@ public:
             }
           }
           std::normal_distribution<double> gauss(0.0, 1.0);
-          jetsetup::scaleJet(j, jetsetup::jerFactor(j.pt, genPt, sf, res, gauss(rng)));
+          const double f = jetsetup::jerFactor(j.pt, genPt, sf, res, gauss(rng));
+          jetsetup::scaleJet(j, f);
+          j.jerFactor *= f;
           break;
         }
         case Type::ConstScale:
